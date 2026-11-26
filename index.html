@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Practise what we preach: no third-party requests at all. The importmap is the only inline script; its hash is pinned here (run tools/csp-hash.sh after editing it). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-gh7NRJ7MEWdYUGMcXx0SUMJY93gUi2UqlztG1amlvwA='; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>CyberNet: networking and security in the age of AI</title>
+<meta name="description" content="A 4-week course, one concept a day: how networks move data, how security works, and the new risks AI brings. Each day is a small interactive 3D world.">
+<meta property="og:title" content="CyberNet">
+<meta property="og:description" content="Interactive 3D explainers for networking and cybersecurity in the age of AI.">
+<meta name="theme-color" content="#05080d" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f2f5f7" media="(prefers-color-scheme: light)">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preload" href="fonts/chakra-petch-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<script src="js/theme-boot.js"></script>
+<link rel="stylesheet" href="css/site.css">
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to the lesson</a>
+
+<div class="topbar">
+  <a id="m-prev" href="#" aria-label="Previous day">‹</a>
+  <button class="menu" id="nav-toggle" type="button" aria-expanded="false" aria-controls="sidebar"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4h14M2 9h14M2 14h14" stroke="currentColor" stroke-width="2"/></svg><span id="nav-current">CyberNet</span></button>
+  <a id="m-next" href="#" aria-label="Next day">›</a>
+</div>
+
+<div class="shell">
+  <aside id="sidebar">
+    <a class="brand" href="#packets" aria-label="CyberNet, start at day 1">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" class="glyph"><path d="M7 23 16 9l9 14H7Z"/></g><g fill="currentColor"><circle cx="16" cy="9" r="2.6"/><circle cx="7" cy="23" r="2.6"/><circle cx="25" cy="23" r="2.6"/></g></svg>
+      <span class="wordmark">CyberNet</span>
+    </a>
+    <p class="brand-sub">Networking and security in the age of AI. Four weeks, one concept a day, each with a small world you can poke at.</p>
+    <div class="theme" role="group" aria-label="Colour theme">
+      <button type="button" data-mode="auto" aria-pressed="false">Auto</button>
+      <button type="button" data-mode="light" aria-pressed="false">Daylight</button>
+      <button type="button" data-mode="dark" aria-pressed="false">Dark</button>
+    </div>
+    <p class="progress-sum" id="progress-sum">Progress is saved on this device only.<span class="bar"><span id="progress-bar"></span></span></p>
+    <nav id="nav" aria-label="Course days"></nav>
+    <button class="reset" id="reset" type="button">Reset progress</button>
+  </aside>
+
+  <main id="main" tabindex="-1">
+    <div id="notice"></div>
+    <header class="head" id="top">
+      <span class="eyebrow" id="day"></span>
+      <h1 id="title">CyberNet</h1>
+      <p class="tagline" id="tagline"></p>
+    </header>
+
+    <section class="card" aria-labelledby="title">
+      <div id="stage" role="region" aria-roledescription="interactive scene" aria-label="Interactive scene" aria-describedby="readout">
+        <p class="stage-msg" id="stage-msg">Loading the scene…<noscript> This site needs JavaScript for its interactive scenes. The lesson text is still readable below once it loads.</noscript></p>
+      </div>
+      <p class="prompt" id="prompt"></p>
+      <div class="panel">
+        <div id="controls" role="group" aria-label="Scene controls"></div>
+        <div id="readout" aria-label="Scene readout">
+          <h2>Readout</h2>
+          <dl id="readout-list"></dl>
+        </div>
+      </div>
+    </section>
+    <p class="sr-only" id="announce" aria-live="polite" aria-atomic="true"></p>
+
+    <article class="body" id="body"></article>
+    <div id="extras"></div>
+    <nav class="pager" id="pager" aria-label="Previous and next day"></nav>
+    <footer class="site">CyberNet is an original educational project. Every scenario is illustrative and defensive: it shows what happens and what stops it, never how to attack. Nothing on this site is sent anywhere.</footer>
+  </main>
+</div>
+
+<div class="glossary-pop" id="glossary-pop" popover="auto" role="dialog" aria-label="Glossary definition"></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
