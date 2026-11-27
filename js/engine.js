@@ -78,8 +78,11 @@ function initRenderer() {
   renderer.domElement.tabIndex = -1;
   const m = $('stage-msg'); if (m) m.remove();
   host.appendChild(renderer.domElement);
+  const leads = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); leads.id = 'leads'; leads.setAttribute('class', 'leads'); leads.setAttribute('aria-hidden', 'true');
+  host.appendChild(leads);
   const tagLayer = document.createElement('div'); tagLayer.className = 'tags'; tagLayer.id = 'tags'; tagLayer.setAttribute('aria-hidden', 'true');
   host.appendChild(tagLayer);
+  host.appendChild($('hud'));
   camera = new THREE.PerspectiveCamera(40, 1, 0.1, 500);
   readTokens();
   new ResizeObserver(resize).observe(host);
@@ -129,7 +132,7 @@ function unmount() {
   mounted = null;
   if (scene) {
     scene.traverse(o => {
-      if (o.geometry) o.geometry.dispose();
+      if (o.geometry && !o.geometry.userData.keep) o.geometry.dispose();
       const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
       ms.forEach(m => { if (m.map && !m.map.userData.keep) m.map.dispose(); m.dispose(); });
     });
@@ -137,6 +140,8 @@ function unmount() {
   frameFns = []; themeFns = []; resizeFns = []; tags = []; lastFit = null;
   if (glow) glow.reset();
   const tl = $('tags'); if (tl) tl.textContent = '';
+  const ld = $('leads'); if (ld) ld.textContent = '';
+  sceneT = 0;
   $('controls').textContent = '';
   $('readout-list').textContent = '';
 }
@@ -149,6 +154,8 @@ function mount(def) {
     return;
   }
   scene = new THREE.Scene();
+  glow.setReduce(mq.matches);
+  scene.add(glow.stars());
   scene.add(new THREE.AmbientLight(0xffffff, 0.9));
   const dl = new THREE.DirectionalLight(0xffffff, 1.4); dl.position.set(4, 10, 6); scene.add(dl);
   camera.position.set(0, 6, 14); camera.lookAt(0, 0, 0);
@@ -176,11 +183,21 @@ function makeCtx() {
     onTheme: fn => themeFns.push(fn),
     onResize: fn => resizeFns.push(fn),
     fit: (w, h, target = V(), dir = V(0, 0.75, 1)) => fitCamera(w, h, target, dir),
-    tag(html, pos = V(), cls = '') {
+    tag(html, pos = V(), cls = '', { lead = null } = {}) {
       const el = document.createElement('div'); el.className = 'tag ' + cls; el.innerHTML = html;
       $('tags').appendChild(el);
-      const t = { el, pos: pos.clone ? pos.clone() : V(...pos), set(h) { if (el.innerHTML !== h) el.innerHTML = h; return t; },
-        show(b) { el.hidden = !b; return t; }, cls(c) { el.className = 'tag ' + c; return t; } };
+      // lead: [dx, dy] px. The label sits off the anchor, joined to it by a thin leader line with a dot.
+      let ln = null;
+      if (lead) {
+        const NS = 'http://www.w3.org/2000/svg';
+        ln = document.createElementNS(NS, 'g'); ln.setAttribute('class', 'lead ' + cls);
+        ln.append(document.createElementNS(NS, 'line'), document.createElementNS(NS, 'circle'));
+        ln.lastChild.setAttribute('r', '2.2');
+        $('leads').appendChild(ln);
+      }
+      const t = { el, ln, lead, pos: pos.clone ? pos.clone() : V(...pos), set(h) { if (el.innerHTML !== h) el.innerHTML = h; return t; },
+        show(b) { el.hidden = !b; if (ln) ln.style.display = b ? '' : 'none'; return t; },
+        cls(c) { el.className = 'tag ' + c; if (ln) ln.setAttribute('class', 'lead ' + c); return t; } };
       tags.push(t); return t;
     },
     readout(key, label, value, tone = '') {
@@ -296,6 +313,7 @@ function show(hash, userNav = true) {
   $('stage').setAttribute('aria-label', `Interactive scene: ${def.title}`);
   document.title = `Day ${def.day}: ${def.title} · CyberNet`;
   $('nav-current').textContent = `Day ${def.day}: ${def.title}`;
+  $('hud-l').textContent = `CyberNet // Day ${pad(def.day)} // ${def.title}`;
 
   const body = $('body');
   body.innerHTML = def.body || plannedBody(def);
@@ -422,6 +440,7 @@ function wireChrome() {
 
 // ---------- loop ----------
 const tmpV = { v: null };
+let sceneT = 0, hudT = 0;
 function placeTags() {
   if (!tags.length || !camera) return;
   const host = $('stage'), w = host.clientWidth, h = host.clientHeight;
@@ -430,8 +449,16 @@ function placeTags() {
     if (t.el.hidden) return;
     v.copy(t.pos).project(camera);
     const behind = v.z > 1;
+    const x = (v.x + 1) / 2 * w, y = (1 - v.y) / 2 * h;
+    const dx = t.lead ? t.lead[0] : 0, dy = t.lead ? t.lead[1] : 0;
     t.el.style.visibility = behind ? 'hidden' : '';
-    t.el.style.transform = `translate(${((v.x + 1) / 2 * w).toFixed(1)}px, ${((1 - v.y) / 2 * h).toFixed(1)}px) translate(-50%, -50%)`;
+    t.el.style.transform = `translate(${(x + dx).toFixed(1)}px, ${(y + dy).toFixed(1)}px) translate(-50%, ${t.lead ? '-100%' : '-50%'})`;
+    if (t.ln) {
+      const [l, c] = t.ln.children;
+      l.setAttribute('x1', x.toFixed(1)); l.setAttribute('y1', y.toFixed(1)); l.setAttribute('x2', (x + dx).toFixed(1)); l.setAttribute('y2', (y + dy).toFixed(1));
+      c.setAttribute('cx', x.toFixed(1)); c.setAttribute('cy', y.toFixed(1));
+      t.ln.style.visibility = behind ? 'hidden' : '';
+    }
   });
 }
 function loop() {
@@ -440,7 +467,9 @@ function loop() {
     requestAnimationFrame(tick);
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     if (document.hidden || !stageVisible || !scene) return;
-    t += dt;
+    t += dt; sceneT += dt;
+    glow.tick(dt);
+    if ((hudT -= dt) <= 0) { hudT = 0.1; $('hud-t').textContent = `T+${sceneT.toFixed(1).padStart(4, '0')}s`; }
     frameFns = frameFns.filter(fn => { try { fn(dt, t); return true; } catch (err) { console.error(err); return false; } });
     placeTags();
     renderer.render(scene, camera);

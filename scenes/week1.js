@@ -60,10 +60,13 @@ CN.register({
       const obj = new T.Mesh(pGeo, mat); obj.visible = false; S.add(obj);
       const ring = G.wire(new T.TorusGeometry(0.34, 0.03, 4, 16), 'ok', { fill: null, halo: false }); ring.visible = false; obj.add(ring);
       const b = G.bloom('trust', 1.3, 0.6); b.visible = false; S.add(b);
-      const tr = G.trail('trust', 20, 3); S.add(tr.obj);
+      const tr = G.path('trust'); S.add(tr.mesh);
       const tag = ctx.tag('', V(), 'bare').show(false);
-      return { obj, ring, b, tr, tag, state: 'idle' };
+      return { obj, ring, b, tr, tag, state: 'idle', wi: 0 };
     });
+    const ringPool = Array.from({ length: 6 }, () => { const r = G.pulse('trust'); S.add(r.mesh); return r; });
+    let ringI = 0;
+    const rings = { fire: (p, k = 'trust') => ringPool[ringI++ % ringPool.length].fire(p, k) };
     const lostMark = G.wire(new T.OctahedronGeometry(0.42), 'alert', { fill: 'surface' }); lostMark.visible = false; S.add(lostMark);
     const lostTag = ctx.tag('Lost', V(), 'alert').show(false);
     const req = { obj: G.wire(new T.SphereGeometry(0.2, 8, 6), 'trust', { fill: 'trust' }), state: 'idle', d: 0, seq: -1 };
@@ -100,7 +103,7 @@ CN.register({
     function send() {
       rng = 1 + Math.floor(Math.random() * 1e6);
       simT = 0; chunks = split(MESSAGE, N); got = new Array(N).fill(false); order = []; resent = 0; outOfOrder = 0; maxSeen = -1; done = false; waitT = 0;
-      pool.forEach(p => { p.state = 'idle'; p.obj.visible = p.b.visible = false; p.tr.clear(); p.tag.show(false); });
+      pool.forEach(p => { p.state = 'idle'; p.obj.visible = p.b.visible = false; p.tr.hide(); p.tag.show(false); });
       req.state = 'idle'; req.obj.visible = false; reqTag.show(false);
       const dropSeq = dropOn ? Math.floor(rand() * N) : -1;
       for (let i = 0; i < N; i++) {
@@ -126,20 +129,20 @@ CN.register({
       simT += dt;
       let active = 0;
       pool.forEach(p => {
-        if (p.state === 'wait' && simT >= p.launch) { p.state = 'fly'; p.tr.clear(); }
+        if (p.state === 'wait' && simT >= p.launch) { p.state = 'fly'; p.wi = 0; p.tr.set(routes[p.ri].pts.map(q => q.clone().setY(PY))); }
         if (p.state !== 'fly') { if (p.state === 'wait') active++; return; }
         active++;
         const r = routes[p.ri];
         p.d += speed(p.ri) * dt;
         if (p.dropAt != null && p.d >= p.dropAt) {
-          p.state = 'lost'; p.obj.visible = p.b.visible = false; p.tag.show(false); p.tr.clear();
+          p.state = 'lost'; p.obj.visible = p.b.visible = false; p.tag.show(false); p.tr.hide();
           lostMark.position.copy(r.pts[1]).setY(1.1); lostMark.visible = true; lostT = 1.8;
           lostTag.pos.copy(r.pts[1]).setY(1.9); lostTag.set(`#${p.seq + 1} lost`).show(true);
           ctx.announce(`Packet ${p.seq + 1} was lost at a router.`);
           return;
         }
         if (p.d >= r.len) {
-          p.state = 'idle'; p.obj.visible = p.b.visible = false; p.tag.show(false); p.tr.clear();
+          p.state = 'idle'; p.obj.visible = p.b.visible = false; p.tag.show(false); p.tr.hide(); rings.fire(RCV.clone().setY(PY), 'ok');
           if (!got[p.seq]) {
             got[p.seq] = true; order.push(p.seq);
             if (p.seq < maxSeen) outOfOrder++;
@@ -151,7 +154,11 @@ CN.register({
         const pos = pointAt(r, p.d, ctx.reduce);
         p.obj.position.copy(pos); p.b.position.copy(pos); p.obj.visible = true; p.b.visible = true;
         p.tag.pos.copy(pos).setY(PY + 0.55); p.tag.set(p.resend ? `#${p.seq + 1} again` : `#${p.seq + 1}`).show(!narrow || p.resend);
-        if (!ctx.reduce) { p.tr.push(pos); p.obj.rotation.y += dt * 2; }
+        p.tr.progress(p.d / r.len);
+        // a router ring pulses as each packet passes through it
+        let wi = 0, acc = 0; while (wi < r.seg.length && acc + r.seg[wi] <= p.d) acc += r.seg[wi++];
+        if (wi > p.wi) { p.wi = wi; if (wi < r.pts.length - 1) rings.fire(r.pts[wi].clone().setY(PY)); }
+        if (!ctx.reduce) p.obj.rotation.y += dt * 2;
       });
 
       // receiver: once nothing else is coming, ask again for anything missing (that's what TCP does)

@@ -35,13 +35,15 @@ export function arc(ctx, a, b, h = 1.6, n = 18) {
 }
 
 /** A travelling thing (packet, message). go(points, speed, onArrive, label). Call update(dt) from the clock. */
-export function mover(ctx, { key = 'text', glow = 'trust', size = 0.34, shape = 'box', trail = true, tagCls = '' } = {}) {
+export function mover(ctx, { key = 'text', glow = 'trust', size = 0.34, shape = 'box', trail = true, tagCls = '', pulse = true } = {}) {
   const { THREE: T, glow: G, V } = ctx, S = ctx.scene;
   const geo = shape === 'sphere' ? new T.SphereGeometry(size * 0.6, 12, 8) : shape === 'octa' ? new T.OctahedronGeometry(size * 0.75) : new T.BoxGeometry(size, size, size);
   const mat = G.track(new T.MeshBasicMaterial(), key);
   const obj = new T.Mesh(geo, mat); obj.visible = false; S.add(obj);
   const b = G.bloom(glow, size * 3.6, 0.55); b.visible = false; S.add(b);
-  const tr = trail ? G.trail(glow, 18, 3) : null; if (tr) S.add(tr.obj);
+  const tr = trail ? G.path(glow) : null; if (tr) S.add(tr.mesh);
+  const ring = pulse ? G.pulse(glow) : null; if (ring) S.add(ring.mesh);
+  let ringKey = glow;
   const tag = ctx.tag('', V(), tagCls).show(false);
   let pts = [], seg = [], len = 0, d = 0, spd = 1, cb = null, active = false, cut = null, onCut = null;
   const m = {
@@ -52,28 +54,28 @@ export function mover(ctx, { key = 'text', glow = 'trust', size = 0.34, shape = 
       pts = points.map(p => p.clone()); seg = []; len = 0;
       for (let i = 1; i < pts.length; i++) { const l = pts[i].distanceTo(pts[i - 1]); seg.push(l); len += l; }
       d = 0; spd = speed; cb = onArrive; active = true; cut = stopAt; onCut = onStop;
-      obj.visible = b.visible = true; tr && tr.clear();
+      obj.visible = b.visible = true; tr && tr.set(pts);
       m.label(label); place(); return m;
     },
     label(t) { tag.set(t || '').show(!!t); return m; },
-    look(k, glowKey = k) { G.recolor(mat, k); b.setKey(glowKey); tr && tr.setKey(glowKey); return m; },
+    look(k, glowKey = k) { G.recolor(mat, k); b.setKey(glowKey); tr && tr.setKey(glowKey); ringKey = glowKey; return m; },
     tagClass(c) { tag.cls(c); return m; },
     update(dt) {
       if (!active) return;
       d += spd * dt;
       if (cut != null && d >= cut * len) { d = cut * len; place(); active = false; const f = onCut; onCut = null; f && f(m); return; }
-      if (d >= len) { d = len; place(); active = false; m.hide(); const f = cb; cb = null; f && f(m); return; }
+      if (d >= len) { d = len; place(); active = false; m.hide(); if (ring) ring.fire(pts[pts.length - 1], ringKey); const f = cb; cb = null; f && f(m); return; }
       place();
       if (!ctx.reduce) obj.rotation.y += dt * 2;
     },
-    hide() { active = false; obj.visible = b.visible = false; tag.show(false); tr && tr.clear(); },
+    hide() { active = false; obj.visible = b.visible = false; tag.show(false); tr && tr.hide(); },
     get position() { return obj.position; },
   };
   function place() {
     const p = along(pts, seg, d, ctx.reduce);
     obj.position.copy(p); b.position.copy(p);
     tag.pos.set(p.x, p.y + 0.62, p.z);
-    if (tr && !ctx.reduce) tr.push(p);
+    if (tr) tr.progress(len ? d / len : 0);
   }
   return m;
 }
@@ -87,7 +89,8 @@ export function node(ctx, geometry, key, x, z, { y = 0, label = '', tagCls = '',
   obj.position.set(x, y + h / 2, z); ctx.scene.add(obj);
   let bl = null;
   if (bloom) { bl = G.bloom(key, bloom, 0.2); bl.position.copy(obj.position); ctx.scene.add(bl); }
-  const tag = label ? ctx.tag(label, V(x, y + h + tagY - 0.9, z), tagCls) : null;
+  // label floats above the node on a short leader line (HUD style); tagY nudges it further up
+  const tag = label ? ctx.tag(label, V(x, y + h, z), tagCls, { lead: [0, -Math.round(14 + (tagY - 1.4) * 20)] }) : null;
   return { obj, tag, p: V(x, y + Math.min(h, 1) * 0.6, z), look(k) { obj.setKey(k); if (bl) bl.setKey(k); return this; } };
 }
 
