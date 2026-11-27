@@ -103,6 +103,17 @@ export function makeGlow(THREE, L) {
     return g;
   }
 
+  /** Loose neon line segments from a flat [x1,y1,z1, x2,y2,z2, …] array (icon details: arrows, bricks, bays). */
+  function segments(pos, key = 'trust', { width = 1.6, halo = false } = {}) {
+    const g = new THREE.Group();
+    const sg = new LineSegmentsGeometry(); sg.setPositions(pos);
+    const core = new LineSegments2(sg, lineMat(key, width, false)); g.add(core);
+    let h = null;
+    if (halo) { h = new LineSegments2(sg, lineMat(key, width, true)); g.add(h); }
+    g.setKey = k => { retrack(core.material, k); if (h) retrack(h.material, k); };
+    return g;
+  }
+
   // ---------- bloom sprite ----------
   let haloTex = null;
   function haloTexture() {
@@ -240,7 +251,7 @@ export function makeGlow(THREE, L) {
   function flat(points) { const a = []; points.forEach(p => a.push(p.x, p.y, p.z)); return a; }
 
   return {
-    line, wire, bloom, grid, path, pulse, stars, track, recolor: retrack,
+    line, wire, segments, bloom, grid, path, pulse, stars, track, recolor: retrack,
     /** engine hooks */
     retheme(c, g) { colors = c; glow = g; tracked.forEach(apply); fns.forEach(fn => fn(c, g)); },
     resize(w, h) { res.set(w, h); lineMats.forEach(m => m.resolution.set(w, h)); },

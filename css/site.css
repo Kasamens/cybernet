@@ -249,4 +249,5 @@ footer.site { max-width: 720px; margin-top: 40px; color: var(--muted); font-size
 /* headline: a soft cyan glow in dark mode only; body text stays plain for contrast */
 :root:not([data-theme="light"]) h1 { text-shadow: 0 0 22px color-mix(in srgb, var(--trust) 35%, transparent); }
 .tag { letter-spacing: .04em; }
+.tag.chunk { font-size: 11px; letter-spacing: 0; color: var(--muted); }
 @media (max-width: 900px) { .hud .rail { font-size: 10px; letter-spacing: .1em; } #hud-t { display: none; } }

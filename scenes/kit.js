@@ -1,3 +1,5 @@
+import { devices } from './devices.js';
+
 /* Small building blocks shared by scenes: things that travel along paths, a pause/step clock,
  * labelled wireframe nodes, arcs and a quick "lost/blocked" flash. All colours are token keys.
  */
@@ -35,11 +37,10 @@ export function arc(ctx, a, b, h = 1.6, n = 18) {
 }
 
 /** A travelling thing (packet, message). go(points, speed, onArrive, label). Call update(dt) from the clock. */
-export function mover(ctx, { key = 'text', glow = 'trust', size = 0.34, shape = 'box', trail = true, tagCls = '', pulse = true } = {}) {
-  const { THREE: T, glow: G, V } = ctx, S = ctx.scene;
-  const geo = shape === 'sphere' ? new T.SphereGeometry(size * 0.6, 12, 8) : shape === 'octa' ? new T.OctahedronGeometry(size * 0.75) : new T.BoxGeometry(size, size, size);
-  const mat = G.track(new T.MeshBasicMaterial(), key);
-  const obj = new T.Mesh(geo, mat); obj.visible = false; S.add(obj);
+export function mover(ctx, { key = 'text', glow = 'trust', size = 0.34, trail = true, tagCls = '', pulse = true } = {}) {
+  const { glow: G, V } = ctx, S = ctx.scene;
+  // every data unit is an envelope, as in network simulators
+  const obj = devices(ctx).envelope(key, size / 0.34); obj.visible = false; S.add(obj);
   const b = G.bloom(glow, size * 3.6, 0.55); b.visible = false; S.add(b);
   const tr = trail ? G.path(glow) : null; if (tr) S.add(tr.mesh);
   const ring = pulse ? G.pulse(glow) : null; if (ring) S.add(ring.mesh);
@@ -58,7 +59,7 @@ export function mover(ctx, { key = 'text', glow = 'trust', size = 0.34, shape = 
       m.label(label); place(); return m;
     },
     label(t) { tag.set(t || '').show(!!t); return m; },
-    look(k, glowKey = k) { G.recolor(mat, k); b.setKey(glowKey); tr && tr.setKey(glowKey); ringKey = glowKey; return m; },
+    look(k, glowKey = k) { obj.setKey(k); b.setKey(glowKey); tr && tr.setKey(glowKey); ringKey = glowKey; return m; },
     tagClass(c) { tag.cls(c); return m; },
     update(dt) {
       if (!active) return;
@@ -66,7 +67,6 @@ export function mover(ctx, { key = 'text', glow = 'trust', size = 0.34, shape = 
       if (cut != null && d >= cut * len) { d = cut * len; place(); active = false; const f = onCut; onCut = null; f && f(m); return; }
       if (d >= len) { d = len; place(); active = false; m.hide(); if (ring) ring.fire(pts[pts.length - 1], ringKey); const f = cb; cb = null; f && f(m); return; }
       place();
-      if (!ctx.reduce) obj.rotation.y += dt * 2;
     },
     hide() { active = false; obj.visible = b.visible = false; tag.show(false); tr && tr.hide(); },
     get position() { return obj.position; },
@@ -81,17 +81,27 @@ export function mover(ctx, { key = 'text', glow = 'trust', size = 0.34, shape = 
 }
 
 /** A labelled wireframe node: returns { obj, p (anchor point), tag, look(key) }. */
-export function node(ctx, geometry, key, x, z, { y = 0, label = '', tagCls = '', tagY = 1.4, fill = 'surface', bloom = 0 } = {}) {
+export function node(ctx, shape, key, x, z, { y = 0, label = '', tagCls = '', tagY = 1.4, fill = 'surface', bloom = 0, lead = null } = {}) {
+  // shape: a device from devices.js (preferred: it looks like the real thing) or a plain geometry
   const { glow: G, V } = ctx;
-  const obj = G.wire(geometry, key, { fill });
-  geometry.computeBoundingBox();
-  const h = geometry.boundingBox.max.y - geometry.boundingBox.min.y;
-  obj.position.set(x, y + h / 2, z); ctx.scene.add(obj);
+  let obj, h;
+  if (shape.isObject3D) {
+    obj = shape; h = obj.userData.h || 1;
+    obj.position.set(x, y, z);
+  } else {
+    obj = G.wire(shape, key, { fill });
+    shape.computeBoundingBox();
+    h = shape.boundingBox.max.y - shape.boundingBox.min.y;
+    obj.position.set(x, y + h / 2, z);
+  }
+  ctx.scene.add(obj);
   let bl = null;
-  if (bloom) { bl = G.bloom(key, bloom, 0.2); bl.position.copy(obj.position); ctx.scene.add(bl); }
-  // label floats above the node on a short leader line (HUD style); tagY nudges it further up
-  const tag = label ? ctx.tag(label, V(x, y + h, z), tagCls, { lead: [0, -Math.round(14 + (tagY - 1.4) * 20)] }) : null;
-  return { obj, tag, p: V(x, y + Math.min(h, 1) * 0.6, z), look(k) { obj.setKey(k); if (bl) bl.setKey(k); return this; } };
+  if (bloom) { bl = G.bloom(key, bloom, 0.2); bl.position.set(x, y + h / 2, z); ctx.scene.add(bl); }
+  // label floats above the node on a short leader line (HUD style); tagY nudges it further up,
+  // lead: [dx, dy] px places it elsewhere (anchored at mid-height when it goes sideways)
+  const side = !!lead;
+  const tag = label ? ctx.tag(label, V(x, y + (side ? h * 0.5 : h), z), tagCls, { lead: lead || [0, -Math.round(14 + (tagY - 1.4) * 20)] }) : null;
+  return { obj, tag, h, p: V(x, y + Math.min(h, 1) * 0.6, z), look(k) { obj.setKey(k); if (bl) bl.setKey(k); return this; } };
 }
 
 /** A brief marker (lost, blocked, dropped) that fades after `life` seconds. Call update(dt). */

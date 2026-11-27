@@ -4,6 +4,7 @@
 import { CN } from '../js/engine.js';
 import { term } from '../js/glossary.js';
 import { makeClock, mover, node, arc, flash, shortestPath } from './kit.js';
+import { devices } from './devices.js';
 
 const MESSAGE = 'MEET ME AT THE CAFE AT 8';
 const split = (s, n) => Array.from({ length: n }, (_, i) => s.slice(Math.round(i * s.length / n), Math.round((i + 1) * s.length / n)));
@@ -30,35 +31,32 @@ CN.register({
       for (let i = 1; i < r.pts.length; i++) { const l = r.pts[i].distanceTo(r.pts[i - 1]); r.seg.push(l); r.len += l; }
       r.line = G.line(r.pts, 'trust', { width: 1.6 }); S.add(r.line);
     });
-    const routerGeo = new T.CylinderGeometry(0.42, 0.42, 0.7, 6);
+    const D = devices(ctx);
     const routers = [];
     routes.forEach(r => r.pts.slice(1, -1).forEach(p => {
-      const m = G.wire(routerGeo, 'trust'); m.position.copy(p).setY(0.35); S.add(m); routers.push(m);
+      const m = D.router(); m.position.copy(p).setY(0); S.add(m); routers.push(m);
     }));
-    const hostGeo = new T.BoxGeometry(1.5, 1.1, 1.5);
-    const sender = G.wire(hostGeo, 'trust'); sender.position.set(SND.x - 0.9, 0.55, 0); S.add(sender);
-    const receiver = G.wire(hostGeo, 'trust'); receiver.position.set(RCV.x + 0.9, 0.55, 0); S.add(receiver);
+    const sender = D.laptop('trust', 1.25); sender.position.set(SND.x - 0.9, 0, 0); S.add(sender);
+    const receiver = D.laptop('trust', 1.25); receiver.position.set(RCV.x + 0.9, 0, 0); S.add(receiver);
     const rBloom = G.bloom('trust', 4.2, 0.22); rBloom.position.copy(receiver.position); S.add(rBloom);
     ctx.tag('You', V(sender.position.x, 1.8, 0), 'trust');
     const FRIEND = narrow ? 'Friend' : 'Your friend';
     const rTag = ctx.tag(FRIEND, V(receiver.position.x, 1.8, 0), 'trust');
-    if (!narrow) ctx.tag('Router', V(0, 1.35, 0), 'bare');
+    if (!narrow) ctx.tag('Router', V(0, 1.05, 0), 'bare');
     const busyTag = ctx.tag('Busy link · 3× slower', V(-2.2 * sx, 1.2, 0.2), 'threat').show(false);
 
     // ---- the receiver's inbox: one slot per packet, along the front ----
     const slotGeo = new T.BoxGeometry(0.46, 0.46, 0.46);
     const slots = Array.from({ length: 10 }, () => {
       const g = G.wire(slotGeo, 'muted', { fill: 'surface', halo: false }); S.add(g);
-      const t = ctx.tag('', V(), 'bare'); return { g, t };
+      const t = ctx.tag('', V(), 'bare chunk'); return { g, t };
     });
     const inboxTag = ctx.tag('Inbox, in order', V(), 'bare');
 
     // ---- packet pool (10 originals + 4 resends), so repeated sends never allocate ----
-    const pGeo = new T.BoxGeometry(0.36, 0.36, 0.36);
     const pool = Array.from({ length: 14 }, () => {
-      const mat = G.track(new T.MeshBasicMaterial(), 'text');
-      const obj = new T.Mesh(pGeo, mat); obj.visible = false; S.add(obj);
-      const ring = G.wire(new T.TorusGeometry(0.34, 0.03, 4, 16), 'ok', { fill: null, halo: false }); ring.visible = false; obj.add(ring);
+      const obj = D.envelope('text', 1.3); obj.visible = false; S.add(obj);
+      const ring = G.wire(new T.TorusGeometry(0.4, 0.025, 4, 24), 'ok', { fill: null, halo: false }); ring.visible = false; obj.add(ring);
       const b = G.bloom('trust', 1.3, 0.6); b.visible = false; S.add(b);
       const tr = G.path('trust'); S.add(tr.mesh);
       const tag = ctx.tag('', V(), 'bare').show(false);
@@ -69,7 +67,7 @@ CN.register({
     const rings = { fire: (p, k = 'trust') => ringPool[ringI++ % ringPool.length].fire(p, k) };
     const lostMark = G.wire(new T.OctahedronGeometry(0.42), 'alert', { fill: 'surface' }); lostMark.visible = false; S.add(lostMark);
     const lostTag = ctx.tag('Lost', V(), 'alert').show(false);
-    const req = { obj: G.wire(new T.SphereGeometry(0.2, 8, 6), 'trust', { fill: 'trust' }), state: 'idle', d: 0, seq: -1 };
+    const req = { obj: D.envelope('trust', 0.8), state: 'idle', d: 0, seq: -1 };
     req.obj.visible = false; S.add(req.obj);
     const reqTag = ctx.tag('', V(), 'trust').show(false);
 
@@ -84,9 +82,9 @@ CN.register({
       const gap = narrow ? 0.62 : 0.7, z = 5.4, x0 = -(N - 1) / 2 * gap;
       slots.forEach((s, i) => {
         const on = i < N; s.g.visible = on; s.t.show(on && !narrow);
-        s.g.position.set(x0 + i * gap, 0.3, z); s.t.pos.set(x0 + i * gap, -0.25, z + 0.35);
+        s.g.position.set(x0 + i * gap, 0.3, z); s.t.pos.set(x0 + i * gap, -0.25, z + 0.35 + (i % 2) * 0.42);
       });
-      inboxTag.pos.set(x0 - gap * 0.9 - (narrow ? 0.4 : 0.8), 0.3, z);
+      inboxTag.pos.set(narrow ? x0 - gap * 0.9 - 0.45 : 0, narrow ? 0.3 : -0.25, narrow ? z : z + 1.45);
       inboxTag.set(narrow ? 'Inbox' : 'Inbox, in order');
     }
     function pointAt(r, d, snap) {
@@ -158,7 +156,6 @@ CN.register({
         // a router ring pulses as each packet passes through it
         let wi = 0, acc = 0; while (wi < r.seg.length && acc + r.seg[wi] <= p.d) acc += r.seg[wi++];
         if (wi > p.wi) { p.wi = wi; if (wi < r.pts.length - 1) rings.fire(r.pts[wi].clone().setY(PY)); }
-        if (!ctx.reduce) p.obj.rotation.y += dt * 2;
       });
 
       // receiver: once nothing else is coming, ask again for anything missing (that's what TCP does)
@@ -261,18 +258,18 @@ CN.register({
     S.fog = new T.Fog(0, 18, 44);
     S.add(G.grid(36, 22, 1));
 
-    const routerGeo = new T.CylinderGeometry(0.45, 0.45, 0.7, 6), hostGeo = new T.BoxGeometry(1.2, 0.9, 1.2);
+    const D = devices(ctx);
     const N = {};
     const R = { A: [-4.6, 0], B: [-1.4, -3], C: [-1.4, 3], F: [0.6, 0], D: [3, -3], E: [3, 3], G: [4.9, 0] };
-    Object.entries(R).forEach(([k, [x, z]]) => { N[k] = node(ctx, routerGeo, 'trust', x * sx, z, { label: k, tagCls: 'bare', tagY: 1.05 }); });
+    Object.entries(R).forEach(([k, [x, z]]) => { N[k] = node(ctx, D.router(), 'trust', x * sx, z, { label: k, tagCls: 'bare', tagY: 1.05 }); });
     const HOSTS = {
       you: { x: -8, z: 0, ip: '192.0.2.10', name: 'You', via: 'A' },
-      shop: { x: 8, z: -3.4, ip: '203.0.113.7', name: 'Shop', via: 'D' },
+      shop: { x: 8, z: -3.4, ip: '203.0.113.7', name: 'Shop', via: 'D', server: true },
       friend: { x: 8.3, z: 0, ip: '198.51.100.23', name: 'Friend', via: 'G' },
-      news: { x: 8, z: 3.4, ip: '203.0.113.80', name: 'News site', via: 'E' },
+      news: { x: 8, z: 3.4, ip: '203.0.113.80', name: 'News site', via: 'E', server: true },
     };
     Object.entries(HOSTS).forEach(([k, h]) => {
-      N[k] = node(ctx, hostGeo, 'trust', h.x * sx, h.z, { label: narrow ? h.name : `${h.name}<br>${h.ip}`, tagCls: k === 'you' ? 'trust' : '' });
+      N[k] = node(ctx, h.server ? D.server('trust', 0.8) : D.laptop(), 'trust', h.x * sx, h.z, { label: narrow ? h.name : `${h.name}<br>${h.ip}`, tagCls: k === 'you' ? 'trust' : '' });
     });
     const LINKS = [['A', 'B'], ['A', 'C'], ['A', 'F'], ['B', 'F'], ['C', 'F'], ['B', 'D'], ['C', 'E'], ['F', 'D'], ['F', 'E'], ['D', 'G'], ['E', 'G']]
       .map(([a, b]) => ({ a, b, cut: false }));
@@ -405,13 +402,13 @@ CN.register({
     const NAMES = { 'shop.example': '203.0.113.7', 'news.example': '198.51.100.42', 'bank.example': '192.0.2.55' };
     const TTL = 30; // seconds of scene time (real records often say 300 s or more)
 
-    const box = new T.BoxGeometry(1.3, 1, 1.3), tower = new T.BoxGeometry(1, 2, 1), cyl = new T.CylinderGeometry(0.7, 0.7, 1.4, 8);
+    const D = devices(ctx);
     const P = {
-      laptop: node(ctx, box, 'trust', -7.4 * sx, 2, { label: narrow ? 'Laptop' : 'Your laptop', tagCls: 'trust' }),
-      resolver: node(ctx, cyl, 'trust', -2.6 * sx, 2, { label: 'Resolver', bloom: 3 }),
-      root: node(ctx, tower, 'trust', 2 * sx, -3.6, { label: 'Root server' }),
-      tld: node(ctx, tower, 'trust', 6.4 * sx, 0, { label: '.example servers' }),
-      auth: node(ctx, tower, 'trust', 2.6 * sx, 4.4, { label: 'shop.example’s name server' }),
+      laptop: node(ctx, D.laptop('trust', 1.1), 'trust', -7.4 * sx, 2, { label: narrow ? 'Laptop' : 'Your laptop', tagCls: 'trust' }),
+      resolver: node(ctx, D.server('trust', 0.9), 'trust', -2.6 * sx, 2, { label: 'Resolver', bloom: 3 }),
+      root: node(ctx, D.server('trust', 1.15), 'trust', 2 * sx, -3.6, { label: 'Root server' }),
+      tld: node(ctx, D.server(), 'trust', 6.4 * sx, 0, { label: '.example servers' }),
+      auth: node(ctx, D.server(), 'trust', 2.6 * sx, 4.4, { label: 'shop.example’s name server' }),
     };
     const COST = { laptop: 8, root: 25, tld: 30, auth: 40 }; // one-way milliseconds to/from the resolver
     [['laptop', 'resolver'], ['resolver', 'root'], ['resolver', 'tld'], ['resolver', 'auth']].forEach(([a, b]) => {
@@ -420,7 +417,7 @@ CN.register({
 
     let name = 'shop.example', cacheOn = true, cache = new Map(), simT = 0;
     let plan = [], qi = 0, wait = 0, busy = false, ms = 0, sent = 0, answer = '(none yet)', viaCache = false;
-    const msg = mover(ctx, { key: 'trust', glow: 'trust', shape: 'sphere', size: 0.4 });
+    const msg = mover(ctx, { key: 'trust', glow: 'trust', size: 0.4 });
 
     function build() {
       const ip = NAMES[name], c = cache.get(name);
@@ -535,7 +532,8 @@ CN.register({
       { n: 443, svc: 'Secure web (HTTPS)', open: true },
       { n: 3306, svc: 'Database (MySQL)', open: false },
     ];
-    const client = node(ctx, new T.BoxGeometry(1.4, 1, 1.4), 'trust', -6.5 * sx, 0, { label: 'Your laptop', tagCls: 'trust' });
+    const D = devices(ctx);
+    const client = node(ctx, D.laptop('trust', 1.2), 'trust', -6.5 * sx, 0, { label: 'Your laptop', tagCls: 'trust' });
     const SX = 5.6 * sx;
     const server = ctx.glow.wire(new T.BoxGeometry(2.2, 3.4, 2.6), 'trust', { fill: 'surface' });
     server.position.set(SX + 1.1, 1.7, 0); S.add(server);
@@ -551,7 +549,7 @@ CN.register({
 
     let port = PORTS[3], loseAck = false, cState = 'CLOSED', sState = 'LISTEN', last = '(none yet)', count = 0;
     let busy = false, timers = [], cSeq = 0, sSeq = 0, dataLeft = 0;
-    const m1 = mover(ctx, { key: 'trust', glow: 'trust', shape: 'sphere', size: 0.42 });
+    const m1 = mover(ctx, { key: 'trust', glow: 'trust', size: 0.42 });
     const m2 = mover(ctx, { key: 'text', glow: 'trust', size: 0.3 });
     const lost = flash(ctx, 'alert');
     const later = (t, fn) => timers.push({ t, fn });
@@ -673,12 +671,15 @@ CN.register({
     S.fog = new T.Fog(0, 16, 40);
     S.add(G.grid(30, 18, 1));
     const Y = 0.9;
-    const you = node(ctx, new T.BoxGeometry(1.4, 1, 1.4), 'trust', -6.6 * sx, 0, { label: 'Your browser', tagCls: 'trust' });
-    const site = node(ctx, new T.BoxGeometry(1.6, 1.8, 1.6), 'trust', 6.6 * sx, 0, { label: 'shop.example' });
+    const D = devices(ctx);
+    const you = node(ctx, D.laptop('trust', 1.2), 'trust', -6.6 * sx, 0, { label: 'Your browser', tagCls: 'trust' });
+    const site = node(ctx, D.server('trust', 1.1), 'trust', 6.6 * sx, 0, { label: 'shop.example' });
     const A = V(-5.7 * sx, Y, 0), B = V(5.6 * sx, Y, 0);
     S.add(G.line([A.clone().setY(0.3), B.clone().setY(0.3)], 'trust', { width: 1.4 }));
-    const eve = node(ctx, new T.OctahedronGeometry(0.75), 'threat', 0, -3.4, { y: 0.2, label: narrow ? 'Eavesdropper' : 'Eavesdropper on the café Wi-Fi', tagCls: 'threat', bloom: 2.6 });
+    // the eavesdropper is just another laptop on the same Wi-Fi; the orange octahedron marks it as untrusted
+    const eve = node(ctx, D.laptop('threat'), 'threat', 0, -3.4, { tagY: 1.9, label: narrow ? 'Eavesdropper' : 'Eavesdropper on the café Wi-Fi', tagCls: 'threat', bloom: 2.6 });
     S.add(G.line([eve.p.clone().setY(0.3), V(0, 0.3, 0)], 'threat', { width: 1, halo: false }));
+    const eveBadge = G.wire(new T.OctahedronGeometry(0.22), 'threat', { fill: 'surface' }); eveBadge.position.set(0, eve.h + 0.35, -3.4); S.add(eveBadge);
     const sees = ctx.tag('Sees: nothing yet', V(0, 0.05, -1.7), 'threat');
     const len = B.x - A.x;
     const tunnel = G.wire(new T.CylinderGeometry(0.55, 0.55, len, 10, 1, true), 'ok', { fill: 'ok', fillOpacity: 0.1, width: 1 });
@@ -807,28 +808,35 @@ CN.register({
     S.fog = new T.Fog(0, 18, 44);
     S.add(G.grid(34, 22, 1));
     const PUBLIC = '203.0.113.5';
-    const dev = new T.BoxGeometry(1.1, 0.8, 1.1), srv = new T.BoxGeometry(1.2, 1.4, 1.2);
+    const Dv = devices(ctx);
     const HX = -6.8 * sx, RX = -1.6 * sx, WX = -0.4 * sx, NX = 7 * sx;
     const home = [V(-9.2 * sx, 0.04, -4.4), V(-0.9 * sx, 0.04, -4.4), V(-0.9 * sx, 0.04, 4.4), V(-9.2 * sx, 0.04, 4.4), V(-9.2 * sx, 0.04, -4.4)];
     S.add(G.line(home, 'trust', { width: 1.2, halo: false }));
     ctx.tag(narrow ? 'Home' : 'Your home · private addresses', V(-5 * sx, 0.1, 4.9), 'bare');
     const D = {
-      laptop: { n: node(ctx, dev, 'trust', HX, -3, { label: narrow ? 'Laptop' : 'Laptop<br>192.168.1.10' }), ip: '192.168.1.10', name: 'Laptop' },
-      phone: { n: node(ctx, dev, 'trust', HX, 0, { label: narrow ? 'Phone' : 'Phone<br>192.168.1.11' }), ip: '192.168.1.11', name: 'Phone' },
-      tv: { n: node(ctx, dev, 'trust', HX, 3, { label: narrow ? 'TV' : 'TV<br>192.168.1.12' }), ip: '192.168.1.12', name: 'TV' },
+      laptop: { n: node(ctx, Dv.laptop(), 'trust', HX, -3, { label: narrow ? 'Laptop' : 'Laptop · 192.168.1.10' }), ip: '192.168.1.10', name: 'Laptop' },
+      phone: { n: node(ctx, Dv.phone(), 'trust', HX, 0, { label: narrow ? 'Phone' : 'Phone · 192.168.1.11' }), ip: '192.168.1.11', name: 'Phone' },
+      tv: { n: node(ctx, Dv.tv(), 'trust', HX, 3, { label: narrow ? 'TV' : 'TV · 192.168.1.12' }), ip: '192.168.1.12', name: 'TV' },
     };
-    const router = node(ctx, new T.BoxGeometry(1, 0.7, 1.6), 'trust', RX, 0, { label: narrow ? 'Router' : `Router<br>public ${PUBLIC}`, tagCls: 'trust', bloom: 2.4 });
-    const wall = G.wire(new T.BoxGeometry(0.08, 2.2, 8.6), 'trust', { fill: 'trust', fillOpacity: 0.07, width: 1 });
-    wall.position.set(WX, 1.1, 0); S.add(wall);
-    ctx.tag('Firewall', V(WX, 2.6, -3.8), 'bare');
+    const router = node(ctx, Dv.router('trust', 1.2), 'trust', RX, 0, { lead: [0, narrow ? 34 : 58], label: narrow ? 'Router' : `Router<br>public ${PUBLIC}`, tagCls: 'trust', bloom: 2.4 });
+    const wall = Dv.firewall('trust', 8.6, 1.2, 0.3); wall.rotation.y = Math.PI / 2;
+    wall.position.set(WX, 0, 0); S.add(wall);
+    ctx.tag('Firewall', V(WX, 1.6, -3.8), 'bare');
     const SV = {
-      news: { n: node(ctx, srv, 'trust', NX, -3.4, { label: narrow ? 'News' : 'News site<br>198.51.100.20' }), ip: '198.51.100.20', port: 443 },
-      game: { n: node(ctx, srv, 'trust', NX, 0, { label: narrow ? 'Game' : 'Game server<br>198.51.100.77' }), ip: '198.51.100.77', port: 3074 },
+      news: { n: node(ctx, Dv.server('trust', 0.9), 'trust', NX, -3.4, { label: narrow ? 'News' : 'News site<br>198.51.100.20' }), ip: '198.51.100.20', port: 443 },
+      game: { n: node(ctx, Dv.server('trust', 0.9), 'trust', NX, 0, { label: narrow ? 'Game' : 'Game server<br>198.51.100.77' }), ip: '198.51.100.77', port: 3074 },
     };
-    const stranger = node(ctx, new T.OctahedronGeometry(0.7), 'threat', NX, 3.6, { y: 0.1, label: 'Stranger', tagCls: 'threat', bloom: 2.4 });
+    const stranger = node(ctx, Dv.laptop('threat'), 'threat', NX, 3.6, { tagY: 1.9, label: 'Stranger', tagCls: 'threat', bloom: 2.4 });
     const Y = 0.85, RP = V(RX, Y, 0);
     Object.values(D).forEach(d => S.add(G.line([d.n.p.clone().setY(0.05), RP.clone().setY(0.05)], 'muted', { width: 1, halo: false })));
-    [...Object.values(SV).map(s => s.n), stranger].forEach(n => S.add(G.line([RP.clone().setY(0.05), n.p.clone().setY(0.05)], 'muted', { width: 1, halo: false })));
+    // the internet: a cloud between your router and everything outside
+    const CX = 3.1 * sx, cloud = Dv.cloud('trust', narrow ? 0.8 : 1); cloud.position.set(CX, 0, 0); S.add(cloud);
+    ctx.tag('Internet', V(CX, 0.1, 1.3), 'bare');
+    const CP = V(CX, Y + 0.3, 0);
+    S.add(G.line([RP.clone().setY(0.05), CP.clone().setY(0.05)], 'muted', { width: 1, halo: false }));
+    [...Object.values(SV).map(s => s.n), stranger].forEach(n => S.add(G.line([CP.clone().setY(0.05), n.p.clone().setY(0.05)], 'muted', { width: 1, halo: false })));
+    // an orange octahedron floats over anything untrusted (shape as well as colour)
+    const badge = G.wire(new T.OctahedronGeometry(0.22), 'threat', { fill: 'surface' }); badge.position.set(NX, stranger.h + 0.35, 3.6); S.add(badge);
 
     let nat = [], nextPort = 40001, forward = false, last = '(none yet)', dropped = 0;
     const pool = Array.from({ length: 4 }, () => mover(ctx, { key: 'text', glow: 'trust', size: 0.34 }));
@@ -845,9 +853,9 @@ CN.register({
         if (!row) { row = { dev: d.name, ip: d.ip, local, pub: nextPort++, to: `${s.ip}:${s.port}` }; nat.push(row); }
         last = `Out: ${d.ip}:${local} rewritten to ${PUBLIC}:${row.pub}`;
         ctx.announce(`The router rewrote the ${d.name.toLowerCase()}'s private address to ${PUBLIC} port ${row.pub} and noted it in its table.`);
-        m.go([RP, at(s.n)], 5, () => {
+        m.go([RP, CP, at(s.n)], 5, () => {
           m.look('ok', 'ok').tagClass('ok');
-          m.go([at(s.n), RP], 5, () => {
+          m.go([at(s.n), CP, RP], 5, () => {
             last = `Back: ${PUBLIC}:${row.pub} matches the table, so it goes to the ${d.name.toLowerCase()}`;
             m.go([RP, at(d.n)], 5, () => { d.n.look('ok'); later(1, () => d.n.look('trust')); ctx.announce(`The reply reached the ${d.name.toLowerCase()}.`); }, `to ${d.ip}:${local}`);
           }, `reply to ${PUBLIC}:${row.pub}`);
@@ -857,7 +865,7 @@ CN.register({
     function knock() {
       const m = free();
       m.look('threat', 'threat').tagClass('threat');
-      m.go([at(stranger), V(WX + 0.15, Y, 0)], 5, () => {
+      m.go([at(stranger), CP, V(WX + 0.15, Y, 0)], 5, () => {
         if (!forward) {
           dropped++; wallHit.at(V(WX + 0.5, 1.4, 0), 'Dropped');
           last = `In: unsolicited packet to ${PUBLIC}:22. No table entry, no rule: dropped.`;
